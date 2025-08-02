@@ -1,0 +1,92 @@
+extends layout
+
+block content
+  .container
+    .row
+      .col-md-12
+        h1= __('Smart Contracts')
+        p.lead= __('Create and deploy smart contracts on the blockchain')
+    
+    .row
+      .col-md-8
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Contract Editor
+          .panel-body
+            .form-group
+              label(for='contract-name') Contract Name
+              input.form-control#contract-name(type='text', placeholder='MyContract')
+            
+            .form-group
+              label(for='contract-code') Contract Code (Solidity-like)
+              textarea.form-control#contract-code(rows='10', placeholder='contract MyContract {\n    uint256 public value;\n    \n    function setValue(uint256 _value) public {\n        value = _value;\n    }\n    \n    function getValue() public view returns (uint256) {\n        return value;\n    }\n}')
+            
+            .form-group
+              label(for='constructor-params') Constructor Parameters (JSON)
+              input.form-control#constructor-params(type='text', placeholder='{"initialValue": 100}')
+            
+            .btn-group.btn-group-justified
+              .btn-group
+                button.btn.btn-primary#compile-contract Compile Contract
+              .btn-group
+                button.btn.btn-success#deploy-contract Deploy Contract
+              .btn-group
+                button.btn.btn-info#test-contract Test Contract
+        
+        .panel.panel-default#contract-bytecode-panel(style='display: none;')
+          .panel-heading
+            h3.panel-title Compiled Bytecode
+          .panel-body
+            pre#contract-bytecode
+        
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Contract Interaction
+          .panel-body
+            .form-group
+              label(for='contract-address') Contract Address
+              select.form-control#contract-address
+                option(value='') Select a deployed contract
+            
+            .form-group
+              label(for='function-name') Function Name
+              input.form-control#function-name(type='text', placeholder='setValue')
+            
+            .form-group
+              label(for='function-params') Parameters (JSON)
+              input.form-control#function-params(type='text', placeholder='{"_value": 42}')
+            
+            .btn-group.btn-group-justified
+              .btn-group
+                button.btn.btn-warning#call-function Call Function
+              .btn-group
+                button.btn.btn-info#view-function View Function
+            
+            .alert.alert-info#function-result(style='display: none; margin-top: 15px;')
+      
+      .col-md-4
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Deployed Contracts
+          .panel-body#deployed-contracts
+            p.text-muted No contracts deployed yet
+        
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Contract Events
+          .panel-body#contract-events
+            p.text-muted No events yet
+        
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Gas Usage
+          .panel-body
+            .progress
+              .progress-bar.progress-bar-info#gas-usage(role='progressbar', style='width: 0%')
+                span.sr-only 0% Gas Used
+            p.small#gas-details Gas: 0 / 1,000,000
+
+  script.
+    $(function() {
+      initializeSmartContracts();
+    });

@@ -1,0 +1,99 @@
+extends layout
+
+block content
+  .container
+    .row
+      .col-md-12
+        h1= __('Wallet Management')
+        p.lead= __('Manage wallets, keys, and digital assets')
+    
+    .row
+      .col-md-6
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Create New Wallet
+          .panel-body
+            .form-group
+              label(for='wallet-name') Wallet Name
+              input.form-control#wallet-name(type='text', placeholder='My Wallet')
+            
+            .form-group
+              label(for='wallet-type') Wallet Type
+              select.form-control#wallet-type
+                option(value='hd') HD Wallet (Hierarchical Deterministic)
+                option(value='simple') Simple Wallet
+                option(value='multisig') Multi-Signature Wallet
+            
+            .form-group#multisig-options(style='display: none;')
+              label(for='required-signatures') Required Signatures
+              input.form-control#required-signatures(type='number', min='2', max='10', value='2')
+              label(for='total-signers') Total Signers
+              input.form-control#total-signers(type='number', min='2', max='10', value='3')
+            
+            button.btn.btn-primary.btn-block#create-wallet Create Wallet
+        
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Import Wallet
+          .panel-body
+            .form-group
+              label(for='import-method') Import Method
+              select.form-control#import-method
+                option(value='mnemonic') Mnemonic Phrase
+                option(value='private-key') Private Key
+                option(value='keystore') Keystore File
+            
+            .form-group#mnemonic-input
+              label(for='mnemonic-phrase') Mnemonic Phrase
+              textarea.form-control#mnemonic-phrase(rows='3', placeholder='word1 word2 word3 ...')
+            
+            .form-group#private-key-input(style='display: none;')
+              label(for='private-key') Private Key
+              input.form-control#private-key(type='password', placeholder='0x...')
+            
+            .form-group#keystore-input(style='display: none;')
+              label(for='keystore-file') Keystore File
+              input.form-control#keystore-file(type='file', accept='.json')
+              label(for='keystore-password') Password
+              input.form-control#keystore-password(type='password', placeholder='Password')
+            
+            button.btn.btn-success.btn-block#import-wallet Import Wallet
+      
+      .col-md-6
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Active Wallets
+          .panel-body#wallet-list
+            p.text-muted No wallets created yet
+        
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Wallet Details
+          .panel-body#wallet-details
+            p.text-muted Select a wallet to view details
+    
+    .row
+      .col-md-12
+        .panel.panel-default
+          .panel-heading
+            h3.panel-title Transaction History
+          .panel-body
+            .table-responsive
+              table.table.table-striped#transaction-history
+                thead
+                  tr
+                    th Hash
+                    th From
+                    th To
+                    th Amount
+                    th Status
+                    th Timestamp
+                tbody
+                  tr
+                    td(colspan='6').text-center.text-muted No transactions yet
+
+  script.
+    $(function() {
+      initializeWalletManagement();
+      updateTransactionHistory();
+    });

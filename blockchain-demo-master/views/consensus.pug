@@ -1,0 +1,463 @@
+extends layout
+
+block content
+  .container-fluid
+    h1 #{__('Consensus Mechanisms')}
+    
+    .row
+      .col-md-12
+        .alert.alert-info
+          strong Interactive Consensus Demo: 
+          | Watch how different consensus mechanisms work in real-time. 
+          | You can simulate network partitions, node failures, and conflicting transactions.
+    
+    .row
+      .col-md-8
+        .control-panel
+          h3 Consensus Control Panel
+          .row
+            .col-md-4
+              h4 Consensus Type
+              select.form-control#consensus-type
+                option(value='pow') Proof of Work
+                option(value='pos') Proof of Stake
+                option(value='pbft') Practical Byzantine Fault Tolerance
+              
+              h4 Network Actions
+              .node-controls
+                button.btn.btn-success.btn-sm#start-consensus Start Consensus
+                button.btn.btn-warning.btn-sm#create-fork Create Fork
+                button.btn.btn-danger.btn-sm#partition-network Partition Network
+            
+            .col-md-4
+              h4 Simulation Controls
+              .form-group
+                label Network Delay (ms)
+                input.form-control#network-delay(type='range', min='0', max='1000', value='100')
+                span#delay-value 100ms
+              
+              .form-group
+                label Byzantine Nodes (%)
+                input.form-control#byzantine-ratio(type='range', min='0', max='33', value='10')
+                span#byzantine-value 10%
+            
+            .col-md-4
+              h4 Consensus Stats
+              .node-info#consensus-stats
+                div Consensus Type: <span id="current-consensus">Proof of Work</span>
+                div Round: <span id="consensus-round">0</span>
+                div Honest Nodes: <span id="honest-nodes">0</span>
+                div Byzantine Nodes: <span id="byzantine-nodes">0</span>
+                div Network Partition: <span id="partition-status">No</span>
+        
+        .consensus-visualization#consensus-container
+          // Consensus visualization will be rendered here
+      
+      .col-md-4
+        .control-panel
+          h3 Consensus Log
+          .node-info#consensus-log(style='height: 400px; overflow-y: auto;')
+            .text-muted Consensus events will appear here
+        
+        .control-panel
+          h3 Node Details
+          .node-info#node-details
+            .text-muted Select a node to view details
+
+  script.
+    var consensusType = 'pow';
+    var consensusRound = 0;
+    var networkPartitioned = false;
+    var consensusNodes = {};
+    var consensusInProgress = false;
+    
+    $(function() {
+      initializeConsensusDemo();
+      
+      $('#consensus-type').change(function() {
+        consensusType = $(this).val();
+        $('#current-consensus').text($(this).find('option:selected').text());
+        resetConsensusDemo();
+      });
+      
+      $('#start-consensus').click(startConsensusRound);
+      $('#create-fork').click(createBlockchainFork);
+      $('#partition-network').click(toggleNetworkPartition);
+      
+      $('#network-delay').on('input', function() {
+        $('#delay-value').text($(this).val() + 'ms');
+      });
+      
+      $('#byzantine-ratio').on('input', function() {
+        $('#byzantine-value').text($(this).val() + '%');
+        updateByzantineNodes();
+      });
+    });
+    
+    function initializeConsensusDemo() {
+      // Create consensus nodes
+      for (var i = 1; i <= 7; i++) {
+        consensusNodes['node' + i] = {
+          id: 'node' + i,
+          x: 150 + (i - 1) * 100,
+          y: 200 + Math.sin(i) * 50,
+          status: 'honest',
+          vote: null,
+          stake: Math.random() * 100 + 50,
+          blockchain: [],
+          round: 0
+        };
+      }
+      
+      renderConsensusVisualization();
+      updateConsensusStats();
+    }
+    
+    function renderConsensusVisualization() {
+      var container = $('#consensus-container');
+      container.empty();
+      container.css({
+        position: 'relative',
+        height: '400px',
+        background: '#f8f9fa',
+        border: '1px solid #dee2e6',
+        borderRadius: '5px'
+      });
+      
+      Object.keys(consensusNodes).forEach(function(nodeId) {
+        var node = consensusNodes[nodeId];
+        var nodeElement = $('<div>')
+          .attr('id', 'consensus-' + nodeId)
+          .addClass('consensus-node consensus-' + node.status)
+          .css({
+            position: 'absolute',
+            left: node.x + 'px',
+            top: node.y + 'px',
+            width: '60px',
+            height: '60px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            border: '2px solid transparent'
+          })
+          .text(nodeId.replace('node', 'N'));
+        
+        nodeElement.click(function() {
+          selectConsensusNode(nodeId);
+        });
+        
+        container.append(nodeElement);
+        
+        // Add vote indicator
+        if (node.vote !== null) {
+          var voteElement = $('<div>')
+            .addClass('vote-indicator')
+            .css({
+              position: 'absolute',
+              left: (node.x + 65) + 'px',
+              top: (node.y + 10) + 'px',
+              background: node.vote ? '#28a745' : '#dc3545',
+              color: 'white',
+              padding: '2px 6px',
+              borderRadius: '10px',
+              fontSize: '10px'
+            })
+            .text(node.vote ? '✓' : '✗');
+          
+          container.append(voteElement);
+        }
+      });
+    }
+    
+    function startConsensusRound() {
+      if (consensusInProgress) return;
+      
+      consensusInProgress = true;
+      consensusRound++;
+      $('#consensus-round').text(consensusRound);
+      
+      addConsensusLog('Starting consensus round ' + consensusRound + ' (' + consensusType.toUpperCase() + ')');
+      
+      // Reset votes
+      Object.keys(consensusNodes).forEach(function(nodeId) {
+        consensusNodes[nodeId].vote = null;
+      });
+      
+      switch (consensusType) {
+        case 'pow':
+          simulateProofOfWork();
+          break;
+        case 'pos':
+          simulateProofOfStake();
+          break;
+        case 'pbft':
+          simulatePBFT();
+          break;
+      }
+    }
+    
+    function simulateProofOfWork() {
+      addConsensusLog('Nodes competing to solve proof-of-work puzzle...');
+      
+      var miningDelay = parseInt($('#network-delay').val());
+      var nodeIds = Object.keys(consensusNodes).filter(function(id) {
+        return consensusNodes[id].status !== 'offline';
+      });
+      
+      // Simulate mining competition
+      var winner = nodeIds[Math.floor(Math.random() * nodeIds.length)];
+      
+      setTimeout(function() {
+        consensusNodes[winner].vote = true;
+        addConsensusLog('Node ' + winner + ' found valid proof-of-work!');
+        
+        // Other nodes validate and accept
+        setTimeout(function() {
+          nodeIds.forEach(function(nodeId) {
+            if (nodeId !== winner && consensusNodes[nodeId].status === 'honest') {
+              consensusNodes[nodeId].vote = true;
+            }
+          });
+          
+          addConsensusLog('Block accepted by honest nodes');
+          renderConsensusVisualization();
+          consensusInProgress = false;
+        }, miningDelay);
+        
+        renderConsensusVisualization();
+      }, miningDelay * 2);
+    }
+    
+    function simulateProofOfStake() {
+      addConsensusLog('Selecting validator based on stake...');
+      
+      var activeNodes = Object.keys(consensusNodes).filter(function(id) {
+        return consensusNodes[id].status !== 'offline';
+      });
+      
+      // Calculate total stake
+      var totalStake = activeNodes.reduce(function(sum, nodeId) {
+        return sum + consensusNodes[nodeId].stake;
+      }, 0);
+      
+      // Select validator based on stake
+      var random = Math.random() * totalStake;
+      var currentStake = 0;
+      var validator = null;
+      
+      for (var i = 0; i < activeNodes.length; i++) {
+        currentStake += consensusNodes[activeNodes[i]].stake;
+        if (random <= currentStake) {
+          validator = activeNodes[i];
+          break;
+        }
+      }
+      
+      setTimeout(function() {
+        consensusNodes[validator].vote = true;
+        addConsensusLog('Node ' + validator + ' selected as validator (stake: ' + Math.round(consensusNodes[validator].stake) + ')');
+        
+        // Other nodes validate
+        setTimeout(function() {
+          activeNodes.forEach(function(nodeId) {
+            if (nodeId !== validator && consensusNodes[nodeId].status === 'honest') {
+              consensusNodes[nodeId].vote = true;
+            }
+          });
+          
+          addConsensusLog('Block validated and accepted');
+          renderConsensusVisualization();
+          consensusInProgress = false;
+        }, 500);
+        
+        renderConsensusVisualization();
+      }, 1000);
+    }
+    
+    function simulatePBFT() {
+      addConsensusLog('Starting PBFT consensus (3-phase protocol)...');
+      
+      var activeNodes = Object.keys(consensusNodes).filter(function(id) {
+        return consensusNodes[id].status !== 'offline';
+      });
+      
+      var byzantineCount = Math.floor(activeNodes.length * parseInt($('#byzantine-ratio').val()) / 100);
+      var requiredVotes = Math.floor((activeNodes.length + byzantineCount) * 2 / 3) + 1;
+      
+      // Phase 1: Pre-prepare
+      setTimeout(function() {
+        addConsensusLog('Phase 1: Pre-prepare - Primary broadcasts proposal');
+        
+        // Phase 2: Prepare
+        setTimeout(function() {
+          addConsensusLog('Phase 2: Prepare - Nodes exchange prepare messages');
+          
+          var honestVotes = 0;
+          activeNodes.forEach(function(nodeId) {
+            if (consensusNodes[nodeId].status === 'honest') {
+              consensusNodes[nodeId].vote = true;
+              honestVotes++;
+            } else if (consensusNodes[nodeId].status === 'byzantine') {
+              consensusNodes[nodeId].vote = Math.random() > 0.5; // Random byzantine behavior
+            }
+          });
+          
+          renderConsensusVisualization();
+          
+          // Phase 3: Commit
+          setTimeout(function() {
+            addConsensusLog('Phase 3: Commit - Nodes commit if 2f+1 votes received');
+            
+            if (honestVotes >= requiredVotes) {
+              addConsensusLog('Consensus reached! Block committed.');
+            } else {
+              addConsensusLog('Consensus failed - insufficient honest votes');
+            }
+            
+            consensusInProgress = false;
+          }, 1000);
+        }, 1000);
+      }, 1000);
+    }
+    
+    function createBlockchainFork() {
+      addConsensusLog('Creating blockchain fork...');
+      
+      // Randomly split nodes into two groups
+      var nodeIds = Object.keys(consensusNodes);
+      var group1 = nodeIds.slice(0, Math.floor(nodeIds.length / 2));
+      var group2 = nodeIds.slice(Math.floor(nodeIds.length / 2));
+      
+      group1.forEach(function(nodeId) {
+        consensusNodes[nodeId].vote = true;
+      });
+      
+      group2.forEach(function(nodeId) {
+        consensusNodes[nodeId].vote = false;
+      });
+      
+      renderConsensusVisualization();
+      addConsensusLog('Network split into two groups - fork created!');
+      
+      // Resolve fork after 5 seconds
+      setTimeout(function() {
+        var winningGroup = Math.random() > 0.5 ? group1 : group2;
+        var losingGroup = winningGroup === group1 ? group2 : group1;
+        
+        losingGroup.forEach(function(nodeId) {
+          consensusNodes[nodeId].vote = true;
+        });
+        
+        renderConsensusVisualization();
+        addConsensusLog('Fork resolved - nodes converged on longest chain');
+      }, 5000);
+    }
+    
+    function toggleNetworkPartition() {
+      networkPartitioned = !networkPartitioned;
+      $('#partition-status').text(networkPartitioned ? 'Yes' : 'No');
+      
+      if (networkPartitioned) {
+        addConsensusLog('Network partitioned - nodes isolated');
+        // Simulate partition by marking some nodes as offline
+        var nodeIds = Object.keys(consensusNodes);
+        var partitionSize = Math.floor(nodeIds.length / 2);
+        
+        for (var i = 0; i < partitionSize; i++) {
+          consensusNodes[nodeIds[i]].status = 'offline';
+        }
+      } else {
+        addConsensusLog('Network partition healed - nodes reconnected');
+        // Restore all nodes
+        Object.keys(consensusNodes).forEach(function(nodeId) {
+          if (consensusNodes[nodeId].status === 'offline') {
+            consensusNodes[nodeId].status = 'honest';
+          }
+        });
+      }
+      
+      renderConsensusVisualization();
+      updateConsensusStats();
+    }
+    
+    function updateByzantineNodes() {
+      var byzantineRatio = parseInt($('#byzantine-ratio').val()) / 100;
+      var nodeIds = Object.keys(consensusNodes);
+      var byzantineCount = Math.floor(nodeIds.length * byzantineRatio);
+      
+      // Reset all to honest first
+      nodeIds.forEach(function(nodeId) {
+        if (consensusNodes[nodeId].status !== 'offline') {
+          consensusNodes[nodeId].status = 'honest';
+        }
+      });
+      
+      // Mark some as byzantine
+      for (var i = 0; i < byzantineCount; i++) {
+        consensusNodes[nodeIds[i]].status = 'byzantine';
+      }
+      
+      renderConsensusVisualization();
+      updateConsensusStats();
+    }
+    
+    function selectConsensusNode(nodeId) {
+      $('.consensus-node').css('border', '2px solid transparent');
+      $('#consensus-' + nodeId).css('border', '2px solid #007bff');
+      
+      var node = consensusNodes[nodeId];
+      var detailsHtml = '';
+      detailsHtml += '<div><strong>Node:</strong> ' + nodeId + '</div>';
+      detailsHtml += '<div><strong>Status:</strong> ' + node.status + '</div>';
+      detailsHtml += '<div><strong>Stake:</strong> ' + Math.round(node.stake) + '</div>';
+      detailsHtml += '<div><strong>Vote:</strong> ' + (node.vote === null ? 'None' : (node.vote ? 'Accept' : 'Reject')) + '</div>';
+      detailsHtml += '<div><strong>Round:</strong> ' + node.round + '</div>';
+      
+      $('#node-details').html(detailsHtml);
+    }
+    
+    function updateConsensusStats() {
+      var honestCount = 0;
+      var byzantineCount = 0;
+      var offlineCount = 0;
+      
+      Object.keys(consensusNodes).forEach(function(nodeId) {
+        switch (consensusNodes[nodeId].status) {
+          case 'honest': honestCount++; break;
+          case 'byzantine': byzantineCount++; break;
+          case 'offline': offlineCount++; break;
+        }
+      });
+      
+      $('#honest-nodes').text(honestCount);
+      $('#byzantine-nodes').text(byzantineCount);
+    }
+    
+    function addConsensusLog(message) {
+      var timestamp = new Date().toLocaleTimeString();
+      var logHtml = '<div class="consensus-event">[' + timestamp + '] ' + message + '</div>';
+      $('#consensus-log').prepend(logHtml);
+      
+      // Keep only last 30 events
+      var events = $('#consensus-log .consensus-event');
+      if (events.length > 30) {
+        events.slice(30).remove();
+      }
+    }
+    
+    function resetConsensusDemo() {
+      consensusRound = 0;
+      $('#consensus-round').text(consensusRound);
+      
+      Object.keys(consensusNodes).forEach(function(nodeId) {
+        consensusNodes[nodeId].vote = null;
+        consensusNodes[nodeId].round = 0;
+      });
+      
+      renderConsensusVisualization();
+      addConsensusLog('Consensus demo reset for ' + consensusType.toUpperCase());
+    }
