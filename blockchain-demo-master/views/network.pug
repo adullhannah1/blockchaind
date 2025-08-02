@@ -1,0 +1,294 @@
+extends layout
+
+block content
+  .container-fluid
+    h1 #{__('Blockchain Network')}
+    
+    .row
+      .col-md-8
+        .control-panel
+          h3 Network Control Panel
+          .node-controls
+            button.btn.btn-success#add-node-btn Add Node
+            button.btn.btn-warning#simulate-latency-btn Simulate Latency
+            button.btn.btn-info#broadcast-transaction-btn Broadcast Transaction
+            button.btn.btn-danger#simulate-failure-btn Simulate Node Failure
+          
+          .row
+            .col-md-6
+              h4 Add Transaction
+              .form-group
+                input.form-control#tx-from(type='text', placeholder='From Address')
+              .form-group
+                input.form-control#tx-to(type='text', placeholder='To Address')
+              .form-group
+                input.form-control#tx-amount(type='number', placeholder='Amount')
+              button.btn.btn-primary#add-transaction-btn Add to Pool
+            
+            .col-md-6
+              h4 Network Stats
+              .node-info#network-stats
+                div Nodes: <span id="node-count">0</span>
+                div Connections: <span id="connection-count">0</span>
+                div Avg Latency: <span id="avg-latency">0ms</span>
+                div Active Transactions: <span id="tx-count">0</span>
+        
+        .network-container#network-visualization
+          // Network nodes will be dynamically added here
+      
+      .col-md-4
+        .transaction-pool
+          h3 Transaction Pool
+          #transaction-pool
+            .text-muted No transactions in pool
+        
+        .control-panel
+          h3 Selected Node Info
+          .node-info#selected-node-info
+            .text-muted Select a node to view details
+        
+        .control-panel
+          h3 Network Events
+          .node-info#network-events(style='height: 200px; overflow-y: auto;')
+            .text-muted Network events will appear here
+
+  script.
+    var selectedNodeId = null;
+    var nodeCounter = 0;
+    var eventCounter = 0;
+    
+    $(function() {
+      initializeNetwork();
+      updateNetworkStats();
+      
+      $('#add-node-btn').click(addNewNode);
+      $('#simulate-latency-btn').click(simulateNetworkLatency);
+      $('#broadcast-transaction-btn').click(broadcastRandomTransaction);
+      $('#simulate-failure-btn').click(simulateNodeFailure);
+      $('#add-transaction-btn').click(addTransactionFromForm);
+    });
+    
+    function initializeNetwork() {
+      // Create initial nodes
+      createNetworkNode('node1', 150, 150);
+      createNetworkNode('node2', 400, 100);
+      createNetworkNode('node3', 650, 200);
+      createNetworkNode('node4', 300, 300);
+      createNetworkNode('node5', 550, 400);
+      
+      // Create initial connections
+      connectNetworkNodes('node1', 'node2');
+      connectNetworkNodes('node2', 'node3');
+      connectNetworkNodes('node3', 'node4');
+      connectNetworkNodes('node4', 'node5');
+      connectNetworkNodes('node1', 'node4');
+      connectNetworkNodes('node2', 'node5');
+      
+      renderNetwork();
+      updateNetworkStats();
+    }
+    
+    function createNetworkNode(nodeId, x, y) {
+      var node = createNode(nodeId, x, y);
+      node.blockchain = generateSampleBlockchain();
+      addNetworkEvent('Node ' + nodeId + ' joined the network');
+      return node;
+    }
+    
+    function connectNetworkNodes(nodeId1, nodeId2) {
+      connectNodes(nodeId1, nodeId2);
+      addNetworkEvent('Connected ' + nodeId1 + ' ↔ ' + nodeId2);
+    }
+    
+    function renderNetwork() {
+      var container = $('#network-visualization');
+      container.empty();
+      
+      // Render connections first (so they appear behind nodes)
+      networkConnections.forEach(function(conn) {
+        renderConnection(conn);
+      });
+      
+      // Render nodes
+      Object.keys(networkNodes).forEach(function(nodeId) {
+        renderNode(networkNodes[nodeId]);
+      });
+    }
+    
+    function renderNode(node) {
+      var nodeElement = $('<div>')
+        .attr('id', 'node-' + node.id)
+        .addClass('network-node node-' + node.status)
+        .css({
+          left: node.x + 'px',
+          top: node.y + 'px'
+        })
+        .text(node.id.replace('node', 'N'));
+      
+      nodeElement.click(function() {
+        selectNode(node.id);
+      });
+      
+      $('#network-visualization').append(nodeElement);
+    }
+    
+    function renderConnection(connection) {
+      var fromNode = networkNodes[connection.from];
+      var toNode = networkNodes[connection.to];
+      
+      if (fromNode && toNode) {
+        var dx = toNode.x - fromNode.x;
+        var dy = toNode.y - fromNode.y;
+        var length = Math.sqrt(dx * dx + dy * dy);
+        var angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        
+        var connectionElement = $('<div>')
+          .addClass('network-connection connection-' + connection.status)
+          .css({
+            left: (fromNode.x + 40) + 'px',
+            top: (fromNode.y + 40) + 'px',
+            width: length + 'px',
+            transform: 'rotate(' + angle + 'deg)'
+          });
+        
+        $('#network-visualization').append(connectionElement);
+      }
+    }
+    
+    function selectNode(nodeId) {
+      selectedNodeId = nodeId;
+      
+      // Update visual selection
+      $('.network-node').removeClass('node-selected');
+      $('#node-' + nodeId).addClass('node-selected');
+      
+      // Update info panel
+      var node = networkNodes[nodeId];
+      if (node) {
+        var infoHtml = '';
+        infoHtml += '<div><strong>Node ID:</strong> ' + node.id + '</div>';
+        infoHtml += '<div><strong>Status:</strong> ' + node.status + '</div>';
+        infoHtml += '<div><strong>Peers:</strong> ' + node.peers.length + '</div>';
+        infoHtml += '<div><strong>Blockchain Length:</strong> ' + node.blockchain.length + '</div>';
+        infoHtml += '<div><strong>Last Seen:</strong> ' + new Date(node.lastSeen).toLocaleTimeString() + '</div>';
+        infoHtml += '<div><strong>Position:</strong> (' + node.x + ', ' + node.y + ')</div>';
+        
+        $('#selected-node-info').html(infoHtml);
+      }
+    }
+    
+    function addNewNode() {
+      nodeCounter++;
+      var nodeId = 'node' + (Object.keys(networkNodes).length + 1);
+      var x = Math.random() * 600 + 50;
+      var y = Math.random() * 400 + 50;
+      
+      createNetworkNode(nodeId, x, y);
+      
+      // Connect to a random existing node
+      var existingNodes = Object.keys(networkNodes).filter(function(id) { return id !== nodeId; });
+      if (existingNodes.length > 0) {
+        var randomNode = existingNodes[Math.floor(Math.random() * existingNodes.length)];
+        connectNetworkNodes(nodeId, randomNode);
+      }
+      
+      renderNetwork();
+      updateNetworkStats();
+    }
+    
+    function simulateNetworkLatency() {
+      networkConnections.forEach(function(conn) {
+        conn.latency = Math.random() * 200 + 50; // 50-250ms
+      });
+      addNetworkEvent('Network latency simulated (50-250ms)');
+    }
+    
+    function broadcastRandomTransaction() {
+      var nodes = Object.keys(networkNodes);
+      if (nodes.length < 2) return;
+      
+      var fromNode = nodes[Math.floor(Math.random() * nodes.length)];
+      var toNode = nodes[Math.floor(Math.random() * nodes.length)];
+      while (toNode === fromNode) {
+        toNode = nodes[Math.floor(Math.random() * nodes.length)];
+      }
+      
+      var amount = Math.floor(Math.random() * 100) + 1;
+      var transaction = addTransaction(fromNode, toNode, amount);
+      
+      // Simulate propagation
+      simulateNetworkPropagation(fromNode, transaction, function(peerId, data) {
+        addNetworkEvent('Transaction propagated to ' + peerId);
+      });
+      
+      addNetworkEvent('Transaction broadcast: ' + fromNode + ' → ' + toNode + ' (' + amount + ')');
+    }
+    
+    function simulateNodeFailure() {
+      var onlineNodes = Object.keys(networkNodes).filter(function(nodeId) {
+        return networkNodes[nodeId].status === 'online';
+      });
+      
+      if (onlineNodes.length > 0) {
+        var nodeToFail = onlineNodes[Math.floor(Math.random() * onlineNodes.length)];
+        updateNodeStatus(nodeToFail, 'offline');
+        
+        // Simulate recovery after 5 seconds
+        setTimeout(function() {
+          updateNodeStatus(nodeToFail, 'online');
+          addNetworkEvent('Node ' + nodeToFail + ' recovered');
+          renderNetwork();
+        }, 5000);
+        
+        addNetworkEvent('Node ' + nodeToFail + ' went offline');
+        renderNetwork();
+      }
+    }
+    
+    function addTransactionFromForm() {
+      var from = $('#tx-from').val().trim();
+      var to = $('#tx-to').val().trim();
+      var amount = parseFloat($('#tx-amount').val());
+      
+      if (from && to && amount > 0) {
+        addTransaction(from, to, amount);
+        $('#tx-from').val('');
+        $('#tx-to').val('');
+        $('#tx-amount').val('');
+        updateNetworkStats();
+      }
+    }
+    
+    function updateNetworkStats() {
+      $('#node-count').text(Object.keys(networkNodes).length);
+      $('#connection-count').text(networkConnections.length);
+      
+      var totalLatency = networkConnections.reduce(function(sum, conn) {
+        return sum + conn.latency;
+      }, 0);
+      var avgLatency = networkConnections.length > 0 ? Math.round(totalLatency / networkConnections.length) : 0;
+      $('#avg-latency').text(avgLatency + 'ms');
+      
+      $('#tx-count').text(transactionPool.length);
+    }
+    
+    function addNetworkEvent(message) {
+      eventCounter++;
+      var timestamp = new Date().toLocaleTimeString();
+      var eventHtml = '<div class="network-event">[' + timestamp + '] ' + message + '</div>';
+      $('#network-events').prepend(eventHtml);
+      
+      // Keep only last 20 events
+      var events = $('#network-events .network-event');
+      if (events.length > 20) {
+        events.slice(20).remove();
+      }
+    }
+    
+    function generateSampleBlockchain() {
+      return [
+        { block: 1, hash: '000015783b764259d382017d91a36d206d0600e2cbb3567748f46a33fe9297cf', data: 'Genesis Block' },
+        { block: 2, hash: '000012fa9b916eb9078f8d98a7864e697ae83ed54f5146bd84452cdafd043c19', data: 'Block 2' },
+        { block: 3, hash: '0000b9015ce2a08b61216ba5a0778545bf4ddd7ceb7bbd85dd8062b29a9140bf', data: 'Block 3' }
+      ];
+    }

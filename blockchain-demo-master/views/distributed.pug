@@ -3,6 +3,11 @@ extends layout
 block content
   .container-fluid
     h1 #{__('Distributed Blockchain')}
+    .alert.alert-info
+      strong Drag and Drop: 
+      | You can drag blocks between different peers to simulate data synchronization. 
+      | Drag a block from one peer to another to swap their data!
+    
     - var peers = {1: 'A', 2: 'B', 3: 'C'}
       each peer, chain in peers
         h3 #{__('Peer')} #{peer}
@@ -36,6 +41,11 @@ block content
       setup(3, 3);
       setup(4, 3);
       setup(5, 3);
+      
+      // Initialize drag and drop functionality
+      setTimeout(function() {
+        initializeDragAndDrop();
+      }, 500);
     });
 
     function getText(block, chain) {

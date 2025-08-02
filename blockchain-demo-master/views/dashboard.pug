@@ -1,0 +1,422 @@
+extends layout
+
+block content
+  .container-fluid
+    h1 #{__('Blockchain Dashboard')}
+    
+    .row
+      .col-md-3
+        .control-panel
+          h3 Network Overview
+          .node-info#network-overview
+            div Total Nodes: <span id="total-nodes">0</span>
+            div Active Connections: <span id="active-connections">0</span>
+            div Blocks Mined: <span id="blocks-mined">0</span>
+            div Pending Transactions: <span id="pending-tx">0</span>
+            div Network Hash Rate: <span id="hash-rate">0 H/s</span>
+            div Difficulty: <span id="current-difficulty">4</span>
+        
+        .control-panel
+          h3 Real-time Controls
+          button.btn.btn-success.btn-block#auto-mine-toggle Start Auto Mining
+          button.btn.btn-info.btn-block#add-random-tx Add Random Transaction
+          button.btn.btn-warning.btn-block#adjust-difficulty Adjust Difficulty
+          button.btn.btn-danger.btn-block#simulate-attack Simulate 51% Attack
+      
+      .col-md-6
+        .control-panel
+          h3 Live Network Visualization
+          .network-container#dashboard-network
+            // Real-time network visualization
+        
+        .control-panel
+          h3 Block Production Timeline
+          canvas#block-timeline(width='600', height='200')
+      
+      .col-md-3
+        .control-panel
+          h3 Live Transaction Feed
+          .node-info#live-transactions(style='height: 300px; overflow-y: auto;')
+            .text-muted Transactions will appear here
+        
+        .control-panel
+          h3 Mining Statistics
+          .node-info#mining-stats
+            div Current Block: <span id="current-block">1</span>
+            div Average Block Time: <span id="avg-block-time">0s</span>
+            div Total Hash Attempts: <span id="total-hashes">0</span>
+            div Success Rate: <span id="success-rate">0%</span>
+
+  script.
+    var autoMining = false;
+    var miningInterval = null;
+    var blockTimeline = [];
+    var totalHashAttempts = 0;
+    var successfulMines = 0;
+    var lastBlockTime = Date.now();
+    
+    $(function() {
+      initializeDashboard();
+      startRealTimeUpdates();
+      
+      $('#auto-mine-toggle').click(toggleAutoMining);
+      $('#add-random-tx').click(addRandomTransaction);
+      $('#adjust-difficulty').click(adjustDifficulty);
+      $('#simulate-attack').click(simulate51Attack);
+    });
+    
+    function initializeDashboard() {
+      // Initialize dashboard network
+      createDashboardNetwork();
+      renderDashboardNetwork();
+      updateDashboardStats();
+      initializeBlockTimeline();
+    }
+    
+    function createDashboardNetwork() {
+      // Create a network of mining nodes
+      for (var i = 1; i <= 8; i++) {
+        var angle = (i - 1) * (2 * Math.PI / 8);
+        var x = 250 + Math.cos(angle) * 150;
+        var y = 200 + Math.sin(angle) * 150;
+        
+        createNode('miner' + i, x, y);
+        networkNodes['miner' + i].hashRate = Math.random() * 1000 + 500; // 500-1500 H/s
+        networkNodes['miner' + i].blocks = 0;
+      }
+      
+      // Connect nodes in a mesh network
+      var nodeIds = Object.keys(networkNodes);
+      for (var i = 0; i < nodeIds.length; i++) {
+        for (var j = i + 1; j < nodeIds.length; j++) {
+          if (Math.random() > 0.3) { // 70% chance of connection
+            connectNodes(nodeIds[i], nodeIds[j]);
+          }
+        }
+      }
+    }
+    
+    function renderDashboardNetwork() {
+      var container = $('#dashboard-network');
+      container.empty();
+      
+      // Render connections
+      networkConnections.forEach(function(conn) {
+        renderDashboardConnection(conn);
+      });
+      
+      // Render nodes
+      Object.keys(networkNodes).forEach(function(nodeId) {
+        renderDashboardNode(networkNodes[nodeId]);
+      });
+    }
+    
+    function renderDashboardNode(node) {
+      var nodeElement = $('<div>')
+        .attr('id', 'dashboard-' + node.id)
+        .addClass('network-node node-' + node.status)
+        .css({
+          left: node.x + 'px',
+          top: node.y + 'px'
+        })
+        .text(node.id.replace('miner', 'M'));
+      
+      // Add hash rate indicator
+      var hashRateElement = $('<div>')
+        .css({
+          position: 'absolute',
+          left: node.x + 'px',
+          top: (node.y + 85) + 'px',
+          fontSize: '10px',
+          color: '#666',
+          textAlign: 'center',
+          width: '80px'
+        })
+        .text(Math.round(node.hashRate) + ' H/s');
+      
+      $('#dashboard-network').append(nodeElement).append(hashRateElement);
+      
+      nodeElement.click(function() {
+        showNodeDetails(node.id);
+      });
+    }
+    
+    function renderDashboardConnection(connection) {
+      var fromNode = networkNodes[connection.from];
+      var toNode = networkNodes[connection.to];
+      
+      if (fromNode && toNode) {
+        var dx = toNode.x - fromNode.x;
+        var dy = toNode.y - fromNode.y;
+        var length = Math.sqrt(dx * dx + dy * dy);
+        var angle = Math.atan2(dy, dx) * 180 / Math.PI;
+        
+        var connectionElement = $('<div>')
+          .addClass('network-connection connection-' + connection.status)
+          .css({
+            left: (fromNode.x + 40) + 'px',
+            top: (fromNode.y + 40) + 'px',
+            width: length + 'px',
+            transform: 'rotate(' + angle + 'deg)'
+          });
+        
+        $('#dashboard-network').append(connectionElement);
+      }
+    }
+    
+    function toggleAutoMining() {
+      autoMining = !autoMining;
+      
+      if (autoMining) {
+        $('#auto-mine-toggle').text('Stop Auto Mining').removeClass('btn-success').addClass('btn-danger');
+        startAutoMining();
+      } else {
+        $('#auto-mine-toggle').text('Start Auto Mining').removeClass('btn-danger').addClass('btn-success');
+        stopAutoMining();
+      }
+    }
+    
+    function startAutoMining() {
+      miningInterval = setInterval(function() {
+        // Simulate mining by random nodes
+        var nodeIds = Object.keys(networkNodes);
+        var miner = nodeIds[Math.floor(Math.random() * nodeIds.length)];
+        
+        simulateMining(miner);
+      }, 2000 + Math.random() * 3000); // 2-5 second intervals
+    }
+    
+    function stopAutoMining() {
+      if (miningInterval) {
+        clearInterval(miningInterval);
+        miningInterval = null;
+      }
+    }
+    
+    function simulateMining(minerId) {
+      var node = networkNodes[minerId];
+      if (!node) return;
+      
+      // Simulate mining attempt
+      totalHashAttempts += Math.floor(Math.random() * 100000) + 10000;
+      
+      // Success probability based on hash rate
+      var successProbability = node.hashRate / 10000;
+      
+      if (Math.random() < successProbability) {
+        // Mining success!
+        node.blocks++;
+        successfulMines++;
+        
+        var currentTime = Date.now();
+        var blockTime = (currentTime - lastBlockTime) / 1000;
+        lastBlockTime = currentTime;
+        
+        blockTimeline.push({
+          time: currentTime,
+          miner: minerId,
+          blockTime: blockTime
+        });
+        
+        // Keep only last 20 blocks
+        if (blockTimeline.length > 20) {
+          blockTimeline.shift();
+        }
+        
+        addLiveTransaction('Block mined by ' + minerId + ' (time: ' + blockTime.toFixed(1) + 's)');
+        updateBlockTimeline();
+        
+        // Animate mining success
+        $('#dashboard-' + minerId).addClass('mining-animation');
+        setTimeout(function() {
+          $('#dashboard-' + minerId).removeClass('mining-animation');
+        }, 2000);
+      }
+      
+      updateDashboardStats();
+    }
+    
+    function addRandomTransaction() {
+      var addresses = ['Alice', 'Bob', 'Charlie', 'David', 'Eve', 'Frank', 'Grace', 'Henry'];
+      var from = addresses[Math.floor(Math.random() * addresses.length)];
+      var to = addresses[Math.floor(Math.random() * addresses.length)];
+      while (to === from) {
+        to = addresses[Math.floor(Math.random() * addresses.length)];
+      }
+      var amount = Math.floor(Math.random() * 100) + 1;
+      
+      addTransaction(from, to, amount);
+      addLiveTransaction('New transaction: ' + from + ' → ' + to + ' (' + amount + ' coins)');
+      updateDashboardStats();
+    }
+    
+    function adjustDifficulty() {
+      difficultyMajor = (difficultyMajor % 6) + 1; // Cycle between 1-6
+      $('#current-difficulty').text(difficultyMajor);
+      
+      // Recalculate pattern
+      pattern = '';
+      maximumNonce = 8;
+      for (var x = 0; x < difficultyMajor; x++) {
+        pattern += '0';
+        maximumNonce *= 16;
+      }
+      pattern += difficultyMinor.toString(16);
+      patternLen = pattern.length;
+      
+      addLiveTransaction('Difficulty adjusted to ' + difficultyMajor + ' leading zeros');
+    }
+    
+    function simulate51Attack() {
+      addLiveTransaction('⚠️ Simulating 51% attack...');
+      
+      // Temporarily give one node majority hash power
+      var nodeIds = Object.keys(networkNodes);
+      var attacker = nodeIds[0];
+      var originalHashRate = networkNodes[attacker].hashRate;
+      
+      // Give attacker 60% of total network hash rate
+      var totalHashRate = nodeIds.reduce(function(sum, id) {
+        return sum + networkNodes[id].hashRate;
+      }, 0);
+      
+      networkNodes[attacker].hashRate = totalHashRate * 0.6;
+      
+      // Simulate attack for 10 seconds
+      setTimeout(function() {
+        networkNodes[attacker].hashRate = originalHashRate;
+        addLiveTransaction('51% attack simulation ended');
+      }, 10000);
+      
+      addLiveTransaction('Node ' + attacker + ' now controls 60% of hash rate');
+    }
+    
+    function updateDashboardStats() {
+      $('#total-nodes').text(Object.keys(networkNodes).length);
+      $('#active-connections').text(networkConnections.length);
+      $('#blocks-mined').text(successfulMines);
+      $('#pending-tx').text(transactionPool.length);
+      
+      var totalHashRate = Object.keys(networkNodes).reduce(function(sum, nodeId) {
+        return sum + networkNodes[nodeId].hashRate;
+      }, 0);
+      $('#hash-rate').text(Math.round(totalHashRate) + ' H/s');
+      
+      var avgBlockTime = blockTimeline.length > 1 ? 
+        blockTimeline.reduce(function(sum, block) { return sum + block.blockTime; }, 0) / blockTimeline.length : 0;
+      $('#avg-block-time').text(avgBlockTime.toFixed(1) + 's');
+      
+      $('#total-hashes').text(totalHashAttempts.toLocaleString());
+      
+      var successRate = totalHashAttempts > 0 ? (successfulMines / totalHashAttempts * 100) : 0;
+      $('#success-rate').text(successRate.toFixed(4) + '%');
+      
+      $('#current-block').text(successfulMines + 1);
+    }
+    
+    function addLiveTransaction(message) {
+      var timestamp = new Date().toLocaleTimeString();
+      var txHtml = '<div class="live-tx">[' + timestamp + '] ' + message + '</div>';
+      $('#live-transactions').prepend(txHtml);
+      
+      // Keep only last 50 transactions
+      var transactions = $('#live-transactions .live-tx');
+      if (transactions.length > 50) {
+        transactions.slice(50).remove();
+      }
+    }
+    
+    function initializeBlockTimeline() {
+      var canvas = document.getElementById('block-timeline');
+      var ctx = canvas.getContext('2d');
+      
+      // Initial empty timeline
+      ctx.fillStyle = '#f8f9fa';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = '#333';
+      ctx.font = '12px Arial';
+      ctx.fillText('Block Production Timeline', 10, 20);
+      ctx.fillText('Time →', canvas.width - 60, canvas.height - 10);
+    }
+    
+    function updateBlockTimeline() {
+      var canvas = document.getElementById('block-timeline');
+      var ctx = canvas.getContext('2d');
+      
+      // Clear canvas
+      ctx.fillStyle = '#f8f9fa';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw timeline
+      if (blockTimeline.length > 1) {
+        var maxTime = Math.max.apply(Math, blockTimeline.map(function(b) { return b.blockTime; }));
+        var minTime = Math.min.apply(Math, blockTimeline.map(function(b) { return b.blockTime; }));
+        
+        ctx.strokeStyle = '#007bff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        for (var i = 0; i < blockTimeline.length; i++) {
+          var x = (i / (blockTimeline.length - 1)) * (canvas.width - 40) + 20;
+          var y = canvas.height - 40 - ((blockTimeline[i].blockTime - minTime) / (maxTime - minTime)) * 120;
+          
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+          
+          // Draw point
+          ctx.fillStyle = '#007bff';
+          ctx.fillRect(x - 2, y - 2, 4, 4);
+        }
+        
+        ctx.stroke();
+      }
+      
+      // Draw labels
+      ctx.fillStyle = '#333';
+      ctx.font = '12px Arial';
+      ctx.fillText('Block Production Timeline', 10, 20);
+      ctx.fillText('Time →', canvas.width - 60, canvas.height - 10);
+      ctx.fillText('Block Time (s)', 10, canvas.height - 10);
+    }
+    
+    function startRealTimeUpdates() {
+      setInterval(function() {
+        updateDashboardStats();
+        
+        // Simulate network activity
+        if (Math.random() < 0.3) { // 30% chance per second
+          addRandomTransaction();
+        }
+        
+        // Update node status randomly
+        Object.keys(networkNodes).forEach(function(nodeId) {
+          if (Math.random() < 0.01) { // 1% chance per second
+            var statuses = ['online', 'syncing'];
+            var newStatus = statuses[Math.floor(Math.random() * statuses.length)];
+            updateNodeStatus(nodeId, newStatus);
+          }
+        });
+        
+        renderDashboardNetwork();
+      }, 1000);
+    }
+    
+    function showNodeDetails(nodeId) {
+      var node = networkNodes[nodeId];
+      if (node) {
+        var detailsHtml = '';
+        detailsHtml += '<div><strong>Node:</strong> ' + nodeId + '</div>';
+        detailsHtml += '<div><strong>Hash Rate:</strong> ' + Math.round(node.hashRate) + ' H/s</div>';
+        detailsHtml += '<div><strong>Blocks Mined:</strong> ' + (node.blocks || 0) + '</div>';
+        detailsHtml += '<div><strong>Status:</strong> ' + node.status + '</div>';
+        detailsHtml += '<div><strong>Peers:</strong> ' + node.peers.length + '</div>';
+        detailsHtml += '<div><strong>Last Seen:</strong> ' + new Date(node.lastSeen).toLocaleTimeString() + '</div>';
+        
+        // Show in a modal or update a details panel
+        alert('Node Details:\n\n' + detailsHtml.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' '));
+      }
+    }

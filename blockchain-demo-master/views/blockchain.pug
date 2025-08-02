@@ -3,16 +3,38 @@ extends layout
 block content
   .container-fluid
     h1 #{__('Blockchain')}
-    .row.row-horizon
-      - var blocks = []
-      - blocks.push({block: 1, chain: 1, nonce: 11316, previous: '0000000000000000000000000000000000000000000000000000000000000000'})
-      - blocks.push({block: 2, chain: 1, nonce: 35230, previous: '000015783b764259d382017d91a36d206d0600e2cbb3567748f46a33fe9297cf'})
-      - blocks.push({block: 3, chain: 1, nonce: 12937, previous: '000012fa9b916eb9078f8d98a7864e697ae83ed54f5146bd84452cdafd043c19'})
-      - blocks.push({block: 4, chain: 1, nonce: 35990, previous: '0000b9015ce2a08b61216ba5a0778545bf4ddd7ceb7bbd85dd8062b29a9140bf'})
-      - blocks.push({block: 5, chain: 1, nonce: 56265, previous: '0000ae8bbc96cf89c68be6e10a865cc47c6c48a9ebec3c6cad729646cefaef83'})
-      each block in blocks
-        .col-xs-7
-          include includes/block
+    
+    .row
+      .col-md-9
+        .row.row-horizon
+          - var blocks = []
+          - blocks.push({block: 1, chain: 1, nonce: 11316, previous: '0000000000000000000000000000000000000000000000000000000000000000'})
+          - blocks.push({block: 2, chain: 1, nonce: 35230, previous: '000015783b764259d382017d91a36d206d0600e2cbb3567748f46a33fe9297cf'})
+          - blocks.push({block: 3, chain: 1, nonce: 12937, previous: '000012fa9b916eb9078f8d98a7864e697ae83ed54f5146bd84452cdafd043c19'})
+          - blocks.push({block: 4, chain: 1, nonce: 35990, previous: '0000b9015ce2a08b61216ba5a0778545bf4ddd7ceb7bbd85dd8062b29a9140bf'})
+          - blocks.push({block: 5, chain: 1, nonce: 56265, previous: '0000ae8bbc96cf89c68be6e10a865cc47c6c48a9ebec3c6cad729646cefaef83'})
+          each block in blocks
+            .col-xs-7
+              include includes/block
+      
+      .col-md-3
+        .transaction-pool
+          h3 Transaction Pool
+          #transaction-pool
+            .text-muted No transactions in pool
+          
+          h4 Add Transaction
+          .form-group
+            input.form-control#tx-from(type='text', placeholder='From Address')
+          .form-group
+            input.form-control#tx-to(type='text', placeholder='To Address')
+          .form-group
+            input.form-control#tx-amount(type='number', placeholder='Amount')
+          button.btn.btn-primary.btn-block#add-transaction-btn Add Transaction
+          
+          hr
+          button.btn.btn-success.btn-block#mine-all-btn Mine All Blocks
+          button.btn.btn-warning.btn-block#reset-chain-btn Reset Chain
 
   script.
     $(function() {
@@ -21,6 +43,16 @@ block content
       setup(3, 1);
       setup(4, 1);
       setup(5, 1);
+      
+      // Initialize transaction pool functionality
+      $('#add-transaction-btn').click(addTransactionFromForm);
+      $('#mine-all-btn').click(mineAllBlocks);
+      $('#reset-chain-btn').click(resetBlockchain);
+      
+      // Add some sample transactions
+      addTransaction('Alice', 'Bob', 50);
+      addTransaction('Bob', 'Charlie', 25);
+      addTransaction('Charlie', 'Alice', 10);
     });
 
     function getText(block, chain) {
@@ -44,4 +76,42 @@ block content
               l.stop();
             }, 250); // give UI time to update
         });
+    }
+    
+    function addTransactionFromForm() {
+      var from = $('#tx-from').val().trim();
+      var to = $('#tx-to').val().trim();
+      var amount = parseFloat($('#tx-amount').val());
+      
+      if (from && to && amount > 0) {
+        addTransaction(from, to, amount);
+        $('#tx-from').val('');
+        $('#tx-to').val('');
+        $('#tx-amount').val('');
+      } else {
+        alert('Please fill in all fields with valid data');
+      }
+    }
+    
+    function mineAllBlocks() {
+      for (var i = 1; i <= 5; i++) {
+        mine(i, 1, false);
+      }
+      updateChain(1, 1);
+      showNotification('All blocks mined successfully!');
+    }
+    
+    function resetBlockchain() {
+      // Reset all nonces and data
+      for (var i = 1; i <= 5; i++) {
+        $('#block'+i+'chain1nonce').val(0);
+        $('#block'+i+'chain1data').val('');
+      }
+      updateChain(1, 1);
+      
+      // Clear transaction pool
+      transactionPool = [];
+      updateTransactionPool();
+      
+      showNotification('Blockchain reset successfully!');
     }
